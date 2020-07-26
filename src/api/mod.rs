@@ -1,14 +1,14 @@
-use super::Ctx;
+use super::Context;
 mod health;
 
 use warp::Filter;
 
 pub struct Api<'c> {
-    ctx: &'c Ctx
+    ctx: &'c Context
 }
 
 impl<'c> Api<'c> {
-    pub fn new(ctx: &'c Ctx) -> Self {
+    pub fn new(ctx: &'c Context) -> Self {
 	Self {
 	    ctx
 	}
