@@ -11,7 +11,9 @@ chrono = "^0.4"
 dotenv = "^0.15"
 log = "^0.4"
 serde = { version = "^1", features = ["derive"] }
-sqlx = { version = "^0.3", default-features = false, features = ["macros", "postgres", "runtime-tokio"] }
+serde_json = "^1"
+sqlx = { version = "^0.3", default-features = false, features = ["json", "macros", "postgres", "runtime-tokio", "uuid"] }
 thiserror = "^1"
-tokio = { version = "^0.2", features = ["macros"]}
+tokio = { version = "^0.2", features = ["macros"] }
+uuid = { version = "^0.8", features = ["serde"] }
 warp = "^0.2"
