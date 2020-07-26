@@ -1,3 +1,4 @@
-fn main() -> std::io::Result<()> {
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
     Ok(())
 }
