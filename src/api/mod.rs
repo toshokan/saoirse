@@ -87,9 +87,21 @@ impl Api {
                     .map_err(|e| warp::reject::custom(e))
 	    });
 
+	let add_session = warp::post()
+	    .and(warp::path!("app" / Uuid / "sessions"))
+	    .and(ctx.clone())
+	    .and(warp::header::<Token>("Authorization"))
+	    .and(warp::body::json::<serde_json::Value>())
+	    .and_then(|app_id, ctx: Arc<Context>, tok, body| async move {
+		ctx.new_session(app_id, body, tok)
+                    .await
+                    .map(|s| warp::reply::json(&s))
+                    .map_err(|e| warp::reject::custom(e))
+	    });
+
         let api = prefix
             .and(warp::path!("v1" / ..))
-            .and(health.or(session_field).or(sessions_id).or(create_app).or(replace_session))
+            .and(health.or(session_field).or(sessions_id).or(create_app).or(replace_session).or(add_session))
             .recover(super::error::handle_error);
 
         warp::serve(api).run(addr).await;
