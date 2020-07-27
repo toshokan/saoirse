@@ -28,7 +28,7 @@ pub enum TokenError {
     #[error("Bad admin token")]
     BadAdminToken,
     #[error("Bad app token")]
-    BadAppToken
+    BadAppToken,
 }
 
 #[derive(Debug)]
@@ -61,9 +61,13 @@ impl Context {
     }
 
     pub async fn check_app_token(&self, app: &Uuid, token: &Uuid) -> Result<(), error::Error> {
-	let token = sqlx::query!("SELECT * FROM apps WHERE app_id = $1 AND token = $2", app.clone(), token.clone())
-            .fetch_optional(&self.pool)
-            .await?;
+        let token = sqlx::query!(
+            "SELECT * FROM apps WHERE app_id = $1 AND token = $2",
+            app.clone(),
+            token.clone()
+        )
+        .fetch_optional(&self.pool)
+        .await?;
 
         if token.is_some() {
             Ok(())
@@ -72,22 +76,30 @@ impl Context {
         }
     }
 
-    pub async fn get_sessions(&self) -> Result<Vec<Session>, error::Error> {
-        let sessions = sqlx::query_as!(
+    pub async fn get_session(&self, app_id: Uuid, id: Uuid, app_token: api::Token) -> Result<Option<Session>, error::Error> {
+	self.check_app_token(&app_id, &app_token.0).await?;
+	
+        let session = sqlx::query_as!(
             Session,
-            "SELECT session_id AS id, app_id, data FROM sessions"
+            "Select session_id AS id, app_id, data FROM sessions WHERE session_id = $1 AND app_id = $2",
+            id,
+	    app_id
         )
-        .fetch_all(&self.pool)
+        .fetch_optional(&self.pool)
         .await?;
 
-        Ok(sessions)
+        Ok(session)
     }
 
     pub async fn get_session_field(
         &self,
+	app_id: Uuid,
         id: Uuid,
         name: &str,
+	app_token: api::Token
     ) -> Result<serde_json::Value, error::Error> {
+	self.check_app_token(&app_id, &app_token.0).await?;
+	
         let value = sqlx::query_as!(
             Session,
             "SELECT session_id as id, app_id, data FROM sessions WHERE session_id = $1",
