@@ -32,6 +32,7 @@ pub enum TokenError {
 }
 
 #[derive(Debug)]
+#[derive(serde::Serialize)]
 pub struct App {
     id: Uuid,
     name: String,
@@ -113,8 +114,8 @@ impl Context {
         value.ok_or_else(|| SessionError::AttributeNotPresent.into())
     }
 
-    pub async fn create_app(&self, admin_token: Uuid, name: &str) -> Result<App, error::Error> {
-        self.check_admin_token(&admin_token).await?;
+    pub async fn create_app(&self, name: &str, admin_token: api::Token) -> Result<App, error::Error> {
+        self.check_admin_token(&admin_token.0).await?;
 
         let app = sqlx::query_as!(
             App,
