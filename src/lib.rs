@@ -157,4 +157,24 @@ impl Context {
 
         Ok(session)
     }
+
+    pub async fn new_session(
+        &self,
+        app_id: Uuid,
+        body: serde_json::Value,
+        app_token: api::Token,
+    ) -> Result<Session, error::Error> {
+        self.check_app_token(&app_id, &app_token.0).await?;
+
+        let session = sqlx::query_as!(
+	    Session,
+	    "INSERT INTO sessions(app_id, data) VALUES($1, $2) RETURNING session_id as id, app_id, data",
+	    app_id,
+	    body
+	)
+	    .fetch_one(&self.pool)
+	    .await?;
+
+        Ok(session)
+    }
 }
