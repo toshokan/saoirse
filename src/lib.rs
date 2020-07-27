@@ -31,8 +31,7 @@ pub enum TokenError {
     BadAppToken,
 }
 
-#[derive(Debug)]
-#[derive(serde::Serialize)]
+#[derive(Debug, serde::Serialize)]
 pub struct App {
     id: Uuid,
     name: String,
@@ -77,9 +76,14 @@ impl Context {
         }
     }
 
-    pub async fn get_session(&self, app_id: Uuid, id: Uuid, app_token: api::Token) -> Result<Option<Session>, error::Error> {
-	self.check_app_token(&app_id, &app_token.0).await?;
-	
+    pub async fn get_session(
+        &self,
+        app_id: Uuid,
+        id: Uuid,
+        app_token: api::Token,
+    ) -> Result<Option<Session>, error::Error> {
+        self.check_app_token(&app_id, &app_token.0).await?;
+
         let session = sqlx::query_as!(
             Session,
             "Select session_id AS id, app_id, data FROM sessions WHERE session_id = $1 AND app_id = $2",
@@ -94,13 +98,13 @@ impl Context {
 
     pub async fn get_session_field(
         &self,
-	app_id: Uuid,
+        app_id: Uuid,
         id: Uuid,
         name: &str,
-	app_token: api::Token
+        app_token: api::Token,
     ) -> Result<serde_json::Value, error::Error> {
-	self.check_app_token(&app_id, &app_token.0).await?;
-	
+        self.check_app_token(&app_id, &app_token.0).await?;
+
         let value = sqlx::query_as!(
             Session,
             "SELECT session_id as id, app_id, data FROM sessions WHERE session_id = $1 AND app_id = $2",
@@ -114,7 +118,11 @@ impl Context {
         value.ok_or_else(|| SessionError::AttributeNotPresent.into())
     }
 
-    pub async fn create_app(&self, name: &str, admin_token: api::Token) -> Result<App, error::Error> {
+    pub async fn create_app(
+        &self,
+        name: &str,
+        admin_token: api::Token,
+    ) -> Result<App, error::Error> {
         self.check_admin_token(&admin_token.0).await?;
 
         let app = sqlx::query_as!(
@@ -126,5 +134,27 @@ impl Context {
         .await?;
 
         Ok(app)
+    }
+
+    pub async fn replace_session(
+        &self,
+        app_id: Uuid,
+        id: Uuid,
+        body: serde_json::Value,
+        app_token: api::Token,
+    ) -> Result<Session, error::Error> {
+        self.check_app_token(&app_id, &app_token.0).await?;
+
+        let session = sqlx::query_as!(
+	    Session,
+	    "UPDATE sessions SET data = $1 WHERE session_id = $2 AND app_id = $3 RETURNING session_id AS id, app_id, data",
+	    body,
+	    id,
+	    app_id
+	)
+	    .fetch_one(&self.pool)
+	    .await?;
+
+        Ok(session)
     }
 }
