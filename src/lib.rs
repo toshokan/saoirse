@@ -102,8 +102,9 @@ impl Context {
 	
         let value = sqlx::query_as!(
             Session,
-            "SELECT session_id as id, app_id, data FROM sessions WHERE session_id = $1",
-            id
+            "SELECT session_id as id, app_id, data FROM sessions WHERE session_id = $1 AND app_id = $2",
+            id,
+	    app_id
         )
         .fetch_optional(&self.pool)
         .await?
