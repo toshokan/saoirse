@@ -1,18 +1,18 @@
 #[derive(serde::Serialize)]
 pub enum HealthStatus {
     OK,
-    Unavailable
+    Unavailable,
 }
 
 #[derive(serde::Serialize)]
 pub struct HealthCheckResponse {
-    status: HealthStatus
+    status: HealthStatus,
 }
 
 impl HealthCheckResponse {
     pub fn ok() -> Self {
-	Self {
-	    status: HealthStatus::OK
-	}
+        Self {
+            status: HealthStatus::OK,
+        }
     }
 }

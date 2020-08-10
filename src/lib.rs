@@ -2,14 +2,14 @@ pub mod api;
 pub mod db;
 pub mod error;
 
-use sqlx::postgres::PgPool;
 use jsonwebtoken::DecodingKey;
+use sqlx::postgres::PgPool;
 use std::env;
 use uuid::Uuid;
 
 pub struct Context {
     pool: sqlx::postgres::PgPool,
-    tokens: TokenService
+    tokens: TokenService,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -33,63 +33,62 @@ pub enum TokenError {
 
 struct TokenService {
     scope: String,
-    key: DecodingKey<'static>
+    key: DecodingKey<'static>,
 }
 
 #[derive(serde::Deserialize)]
 pub struct TokenClaims {
     sub: String,
-    scope: String
+    scope: String,
 }
 
 impl TokenService {
     fn new() -> Self {
-	use std::io::Read;
+        use std::io::Read;
 
-	let scope = env::var("SAOIRSE_SCOPE").expect("Failed to get SAOIRSE_SCOPE");
-	let jwt_key_path = env::var("JWT_PUBLIC_KEY").expect("Failed to get JWT_PUBLIC_KEY");
-	let mut public_key_contents = vec![];
-	std::fs::File::open(&jwt_key_path)
-	    .expect("Failed to open s key file")
-	    .read_to_end(&mut public_key_contents)
-	    .expect("Failed to read secret key file");
-	
-	let key = DecodingKey::from_ec_pem(&public_key_contents)
-	    .expect("Failed to parse public key")
-	    .into_static();
-	
-	Self { scope, key }
+        let scope = env::var("SAOIRSE_SCOPE").expect("Failed to get SAOIRSE_SCOPE");
+        let jwt_key_path = env::var("JWT_PUBLIC_KEY").expect("Failed to get JWT_PUBLIC_KEY");
+        let mut public_key_contents = vec![];
+        std::fs::File::open(&jwt_key_path)
+            .expect("Failed to open s key file")
+            .read_to_end(&mut public_key_contents)
+            .expect("Failed to read secret key file");
+
+        let key = DecodingKey::from_ec_pem(&public_key_contents)
+            .expect("Failed to parse public key")
+            .into_static();
+
+        Self { scope, key }
     }
 
     pub fn validate_token(&self, token: &str) -> Result<TokenClaims, ()> {
-	use jsonwebtoken::{decode, Validation, TokenData};
-	
-	decode(token, &self.key, &Validation::default())
-	    .map(|t: TokenData<TokenClaims>| t.claims)
-	    .map_err(|_| {
-		eprintln!("Bad token");
-		()
-	    })
-	    .and_then(|claims| {
-		let split: Vec<String> = claims.scope.split(',').map(ToString::to_string).collect();
-		if split.contains(&self.scope) {
-		    Ok(claims)
-		} else {
-		    Err(())
-		}
-	    })
+        use jsonwebtoken::{decode, TokenData, Validation};
+
+        decode(token, &self.key, &Validation::default())
+            .map(|t: TokenData<TokenClaims>| t.claims)
+            .map_err(|_| {
+                eprintln!("Bad token");
+                ()
+            })
+            .and_then(|claims| {
+                let split: Vec<String> = claims.scope.split(',').map(ToString::to_string).collect();
+                if split.contains(&self.scope) {
+                    Ok(claims)
+                } else {
+                    Err(())
+                }
+            })
     }
 }
 
 impl Context {
     pub async fn new() -> Result<Self, error::Error> {
-	
         let pool = PgPool::builder()
             .max_size(10)
             .build(&env::var("DATABASE_URL").expect("Failed to get DATABASE_URL"))
             .await?;
 
-	let tokens = TokenService::new();
+        let tokens = TokenService::new();
 
         Ok(Self { pool, tokens })
     }
@@ -172,8 +171,8 @@ impl Context {
 	    app_id,
 	    body
 	)
-	    .fetch_one(&self.pool)
-	    .await?;
+        .fetch_one(&self.pool)
+        .await?;
 
         Ok(session)
     }
