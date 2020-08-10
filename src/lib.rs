@@ -3,17 +3,19 @@ pub mod db;
 pub mod error;
 
 use sqlx::postgres::PgPool;
+use jsonwebtoken::DecodingKey;
 use std::env;
 use uuid::Uuid;
 
 pub struct Context {
     pool: sqlx::postgres::PgPool,
+    tokens: TokenService
 }
 
 #[derive(Debug, serde::Serialize)]
 pub struct Session {
     id: Uuid,
-    app_id: Uuid,
+    app_id: String,
     data: serde_json::Value,
 }
 
@@ -25,64 +27,55 @@ pub enum SessionError {
 
 #[derive(Debug, thiserror::Error, serde::Serialize)]
 pub enum TokenError {
-    #[error("Bad admin token")]
-    BadAdminToken,
     #[error("Bad app token")]
     BadAppToken,
 }
 
-#[derive(Debug, serde::Serialize)]
-pub struct App {
-    id: Uuid,
-    name: String,
-    token: Uuid,
+struct TokenService {
+    scope: String,
+    key: DecodingKey<'static>
+}
+
+impl TokenService {
+    fn new() -> Self {
+	use std::io::Read;
+
+	let scope = env::var("SAOIRSE_SCOPE").expect("Failed to get SAOIRSE_SCOPE");
+	let jwt_key_path = env::var("JWT_PUBLIC_KEY").expect("Failed to get JWT_PUBLIC_KEY");
+	let mut public_key_contents = vec![];
+	std::fs::File::open(&jwt_key_path)
+	    .expect("Failed to open s key file")
+	    .read_to_end(&mut public_key_contents)
+	    .expect("Failed to read secret key file");
+	
+	let key = DecodingKey::from_ec_pem(&public_key_contents)
+	    .expect("Failed to parse public key")
+	    .into_static();
+	
+	Self { scope, key }
+    }
 }
 
 impl Context {
     pub async fn new() -> Result<Self, error::Error> {
+	
         let pool = PgPool::builder()
             .max_size(10)
             .build(&env::var("DATABASE_URL").expect("Failed to get DATABASE_URL"))
             .await?;
 
-        Ok(Self { pool })
-    }
+	let tokens = TokenService::new();
 
-    pub async fn check_admin_token(&self, token: &Uuid) -> Result<(), error::Error> {
-        let token = sqlx::query!("SELECT * FROM admin_tokens WHERE token = $1", token.clone())
-            .fetch_optional(&self.pool)
-            .await?;
-
-        if token.is_some() {
-            Ok(())
-        } else {
-            Err(TokenError::BadAdminToken.into())
-        }
-    }
-
-    pub async fn check_app_token(&self, app: &Uuid, token: &Uuid) -> Result<(), error::Error> {
-        let token = sqlx::query!(
-            "SELECT * FROM apps WHERE app_id = $1 AND token = $2",
-            app.clone(),
-            token.clone()
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-
-        if token.is_some() {
-            Ok(())
-        } else {
-            Err(TokenError::BadAppToken.into())
-        }
+        Ok(Self { pool, tokens })
     }
 
     pub async fn get_session(
         &self,
-        app_id: Uuid,
+        app_id: &str,
         id: Uuid,
         app_token: api::Token,
     ) -> Result<Option<Session>, error::Error> {
-        self.check_app_token(&app_id, &app_token.0).await?;
+        // self.check_app_token(&app_id, &app_token.0).await?; // TODO
 
         let session = sqlx::query_as!(
             Session,
@@ -98,12 +91,12 @@ impl Context {
 
     pub async fn get_session_field(
         &self,
-        app_id: Uuid,
+        app_id: &str,
         id: Uuid,
         name: &str,
         app_token: api::Token,
     ) -> Result<serde_json::Value, error::Error> {
-        self.check_app_token(&app_id, &app_token.0).await?;
+        // self.check_app_token(&app_id, &app_token.0).await?; // TODO
 
         let value = sqlx::query_as!(
             Session,
@@ -118,32 +111,14 @@ impl Context {
         value.ok_or_else(|| SessionError::AttributeNotPresent.into())
     }
 
-    pub async fn create_app(
-        &self,
-        name: &str,
-        admin_token: api::Token,
-    ) -> Result<App, error::Error> {
-        self.check_admin_token(&admin_token.0).await?;
-
-        let app = sqlx::query_as!(
-            App,
-            "INSERT INTO apps (name) VALUES ($1) RETURNING app_id as id, name, token",
-            name
-        )
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(app)
-    }
-
     pub async fn replace_session(
         &self,
-        app_id: Uuid,
+        app_id: &str,
         id: Uuid,
         body: serde_json::Value,
         app_token: api::Token,
     ) -> Result<Session, error::Error> {
-        self.check_app_token(&app_id, &app_token.0).await?;
+        // self.check_app_token(&app_id, &app_token.0).await?;
 
         let session = sqlx::query_as!(
 	    Session,
@@ -160,11 +135,11 @@ impl Context {
 
     pub async fn new_session(
         &self,
-        app_id: Uuid,
+        app_id: &str,
         body: serde_json::Value,
         app_token: api::Token,
     ) -> Result<Session, error::Error> {
-        self.check_app_token(&app_id, &app_token.0).await?;
+        // self.check_app_token(&app_id, &app_token.0).await?;
 
         let session = sqlx::query_as!(
 	    Session,

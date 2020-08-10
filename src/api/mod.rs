@@ -42,58 +42,47 @@ impl Api {
             warp::reply::json(&status)
         });
 
-        let sessions_id = warp::path!("app" / Uuid / "sessions" / Uuid)
+        let sessions_id = warp::path!("app" / String / "sessions" / Uuid)
             .and(ctx.clone())
             .and(warp::header::<Token>("Authorization"))
-            .and_then(|app_id, session_id, ctx: Arc<Context>, tok| async move {
-                ctx.get_session(app_id, session_id, tok)
+            .and_then(|app_id: String, session_id, ctx: Arc<Context>, tok| async move {
+                ctx.get_session(&app_id, session_id, tok)
                     .await
                     .map(|s| warp::reply::json(&s))
                     .map_err(|e| warp::reject::custom(e))
             });
 
-        let session_field = warp::path!("app" / Uuid / "sessions" / Uuid / String)
+        let session_field = warp::path!("app" / String / "sessions" / Uuid / String)
             .and(ctx.clone())
             .and(warp::header::<Token>("Authorization"))
             .and_then(
-                |app_id, session_id, field: String, ctx: Arc<Context>, tok| async move {
-                    ctx.get_session_field(app_id, session_id, field.as_ref(), tok)
+                |app_id: String, session_id, field: String, ctx: Arc<Context>, tok| async move {
+                    ctx.get_session_field(&app_id, session_id, field.as_ref(), tok)
                         .await
                         .map(|s| warp::reply::json(&s))
                         .map_err(|e| warp::reject::custom(e))
                 },
             );
 
-        let create_app = warp::post()
-            .and(warp::path!("app" / String))
-            .and(ctx.clone())
-            .and(warp::header::<Token>("Authorization"))
-            .and_then(|name: String, ctx: Arc<Context>, tok| async move {
-                ctx.create_app(&name, tok)
-                    .await
-                    .map(|s| warp::reply::json(&s))
-                    .map_err(|e| warp::reject::custom(e))
-            });
-
 	let replace_session = warp::put()
-	    .and(warp::path!("app" / Uuid / "sessions" / Uuid))
+	    .and(warp::path!("app" / String / "sessions" / Uuid))
 	    .and(ctx.clone())
 	    .and(warp::header::<Token>("Authorization"))
 	    .and(warp::body::json::<serde_json::Value>())
-	    .and_then(|app_id, session_id, ctx: Arc<Context>, tok, body| async move {
-		ctx.replace_session(app_id, session_id, body, tok)
+	    .and_then(|app_id: String, session_id, ctx: Arc<Context>, tok, body| async move {
+		ctx.replace_session(&app_id, session_id, body, tok)
                     .await
                     .map(|s| warp::reply::json(&s))
                     .map_err(|e| warp::reject::custom(e))
 	    });
 
 	let add_session = warp::post()
-	    .and(warp::path!("app" / Uuid / "sessions"))
+	    .and(warp::path!("app" / String / "sessions"))
 	    .and(ctx.clone())
 	    .and(warp::header::<Token>("Authorization"))
 	    .and(warp::body::json::<serde_json::Value>())
-	    .and_then(|app_id, ctx: Arc<Context>, tok, body| async move {
-		ctx.new_session(app_id, body, tok)
+	    .and_then(|app_id: String, ctx: Arc<Context>, tok, body| async move {
+		ctx.new_session(&app_id, body, tok)
                     .await
                     .map(|s| warp::reply::json(&s))
                     .map_err(|e| warp::reject::custom(e))
@@ -101,7 +90,7 @@ impl Api {
 
         let api = prefix
             .and(warp::path!("v1" / ..))
-            .and(health.or(session_field).or(sessions_id).or(create_app).or(replace_session).or(add_session))
+            .and(health.or(session_field).or(sessions_id).or(replace_session).or(add_session))
             .recover(super::error::handle_error);
 
         warp::serve(api).run(addr).await;
