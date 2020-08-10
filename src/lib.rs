@@ -62,12 +62,17 @@ impl TokenService {
     }
 
     pub fn validate_token(&self, token: &str) -> Result<TokenClaims, ()> {
-        use jsonwebtoken::{decode, TokenData, Validation};
+        use jsonwebtoken::{decode, TokenData, Validation, Algorithm};
 
-        decode(token, &self.key, &Validation::default())
+	let validation = Validation {
+	    algorithms: vec![Algorithm::ES256],
+	    ..Default::default()
+	};
+
+        decode(token, &self.key, &validation)
             .map(|t: TokenData<TokenClaims>| t.claims)
-            .map_err(|_| {
-                eprintln!("Bad token");
+            .map_err(|e| {
+                eprintln!("Bad token {:?}", e);
                 ()
             })
             .and_then(|claims| {
