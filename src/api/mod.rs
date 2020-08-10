@@ -1,4 +1,4 @@
-use super::Context;
+use super::{Context, TokenClaims};
 use std::sync::Arc;
 mod health;
 
@@ -7,23 +7,19 @@ use warp::Filter;
 
 pub struct Api;
 
-#[derive(Debug)]
-pub struct Token(pub Uuid);
+pub struct Token(pub String);
 
 #[derive(Debug)]
 pub enum TokenParseError {
     Type,
-    Format,
 }
 
 impl std::str::FromStr for Token {
     type Err = TokenParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.starts_with("Saoirse ") {
-            let s = &s[8..];
-            Uuid::from_str(s)
-                .map(|u| Token(u))
-                .map_err(|_| TokenParseError::Format)
+        if s.starts_with("Bearer ") {
+            let s = &s[7..];
+	    Ok(Token(s.to_string()))
         } else {
             Err(TokenParseError::Type)
         }
@@ -35,6 +31,13 @@ impl Api {
         let ctx = Arc::new(ctx);
         let ctx = warp::any().map(move || ctx.clone());
 
+	let validate_token = ctx.clone()
+	    .and(warp::header::<Token>("Authorization"))
+	    .map(|ctx: Arc<Context>, token: Token| {
+		ctx.tokens.validate_token(&token.0)
+		    .unwrap()
+	    });
+
         let prefix = warp::path!("api" / ..);
 
         let health = warp::path!("health").map(|| {
@@ -44,7 +47,7 @@ impl Api {
 
         let sessions_id = warp::path!("app" / String / "sessions" / Uuid)
             .and(ctx.clone())
-            .and(warp::header::<Token>("Authorization"))
+            .and(validate_token.clone())
             .and_then(|app_id: String, session_id, ctx: Arc<Context>, tok| async move {
                 ctx.get_session(&app_id, session_id, tok)
                     .await
@@ -54,7 +57,7 @@ impl Api {
 
         let session_field = warp::path!("app" / String / "sessions" / Uuid / String)
             .and(ctx.clone())
-            .and(warp::header::<Token>("Authorization"))
+            .and(validate_token.clone())
             .and_then(
                 |app_id: String, session_id, field: String, ctx: Arc<Context>, tok| async move {
                     ctx.get_session_field(&app_id, session_id, field.as_ref(), tok)
@@ -67,7 +70,7 @@ impl Api {
 	let replace_session = warp::put()
 	    .and(warp::path!("app" / String / "sessions" / Uuid))
 	    .and(ctx.clone())
-	    .and(warp::header::<Token>("Authorization"))
+	    .and(validate_token.clone())
 	    .and(warp::body::json::<serde_json::Value>())
 	    .and_then(|app_id: String, session_id, ctx: Arc<Context>, tok, body| async move {
 		ctx.replace_session(&app_id, session_id, body, tok)
@@ -79,7 +82,7 @@ impl Api {
 	let add_session = warp::post()
 	    .and(warp::path!("app" / String / "sessions"))
 	    .and(ctx.clone())
-	    .and(warp::header::<Token>("Authorization"))
+	    .and(validate_token.clone())
 	    .and(warp::body::json::<serde_json::Value>())
 	    .and_then(|app_id: String, ctx: Arc<Context>, tok, body| async move {
 		ctx.new_session(&app_id, body, tok)

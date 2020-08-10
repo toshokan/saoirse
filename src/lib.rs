@@ -36,6 +36,12 @@ struct TokenService {
     key: DecodingKey<'static>
 }
 
+#[derive(serde::Deserialize)]
+pub struct TokenClaims {
+    sub: String,
+    scope: String
+}
+
 impl TokenService {
     fn new() -> Self {
 	use std::io::Read;
@@ -53,6 +59,25 @@ impl TokenService {
 	    .into_static();
 	
 	Self { scope, key }
+    }
+
+    pub fn validate_token(&self, token: &str) -> Result<TokenClaims, ()> {
+	use jsonwebtoken::{decode, Validation, TokenData};
+	
+	decode(token, &self.key, &Validation::default())
+	    .map(|t: TokenData<TokenClaims>| t.claims)
+	    .map_err(|_| {
+		eprintln!("Bad token");
+		()
+	    })
+	    .and_then(|claims| {
+		let split: Vec<String> = claims.scope.split(',').map(ToString::to_string).collect();
+		if split.contains(&self.scope) {
+		    Ok(claims)
+		} else {
+		    Err(())
+		}
+	    })
     }
 }
 
@@ -73,7 +98,7 @@ impl Context {
         &self,
         app_id: &str,
         id: Uuid,
-        app_token: api::Token,
+        app_token: TokenClaims,
     ) -> Result<Option<Session>, error::Error> {
         // self.check_app_token(&app_id, &app_token.0).await?; // TODO
 
@@ -94,7 +119,7 @@ impl Context {
         app_id: &str,
         id: Uuid,
         name: &str,
-        app_token: api::Token,
+        app_token: TokenClaims,
     ) -> Result<serde_json::Value, error::Error> {
         // self.check_app_token(&app_id, &app_token.0).await?; // TODO
 
@@ -116,7 +141,7 @@ impl Context {
         app_id: &str,
         id: Uuid,
         body: serde_json::Value,
-        app_token: api::Token,
+        app_token: TokenClaims,
     ) -> Result<Session, error::Error> {
         // self.check_app_token(&app_id, &app_token.0).await?;
 
@@ -137,7 +162,7 @@ impl Context {
         &self,
         app_id: &str,
         body: serde_json::Value,
-        app_token: api::Token,
+        app_token: TokenClaims,
     ) -> Result<Session, error::Error> {
         // self.check_app_token(&app_id, &app_token.0).await?;
 
